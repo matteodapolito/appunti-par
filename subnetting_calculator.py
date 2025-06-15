@@ -2,46 +2,80 @@ import os
 import json
 import ipaddress
 
-def calculate_vlsm(main_network, reserved_networks, lans_info):
-    """Calcola le sottoreti usando VLSM."""
-    print("[INFO] Calcolo del subnetting VLSM in corso...")
-    sorted_lans = sorted(lans_info, key=lambda x: x['hosts_needed'], reverse=True)
+def calculate_vlsm(main_network_str, reserved_networks_str, lans_info):
+    """
+    Calcola le sottoreti usando VLSM, gestendo anche le LAN con NetID pre-assegnato.
+    """
+    print("[INFO] Calcolo del subnetting VLSM avanzato in corso...")
     
-    available_networks = [ipaddress.ip_network(main_network)]
+    # Inizializzazione
     subnet_details = {}
+    main_network = ipaddress.ip_network(main_network_str)
 
-    for r_net_str in reserved_networks:
-        reserved = ipaddress.ip_network(r_net_str)
+    # Separa le LAN con NetID forzato da quelle flessibili
+    forced_lans = [lan for lan in lans_info if 'forced_netid' in lan]
+    flexible_lans = [lan for lan in lans_info if 'forced_netid' not in lan]
+
+    # Processa prima le LAN con NetID forzato
+    # e aggiungi i loro range allo spazio generale riservato
+    all_reserved_networks = [ipaddress.ip_network(r) for r in reserved_networks_str]
+    for lan in forced_lans:
+        lan_name = lan['name']
+        forced_net = ipaddress.ip_network(lan['forced_netid'])
+        
+        # Verifica che il NetID forzato sia contenuto nel range principale
+        if not main_network.supernet_of(forced_net):
+            print(f"[ERRORE] Il NetID forzato {forced_net} per {lan_name} non è contenuto nel range principale {main_network}.")
+            return None
+            
+        # Aggiungi i dettagli della subnet e prenota lo spazio
+        subnet_details[lan_name] = {
+            "net": forced_net,
+            "usable_hosts": list(forced_net.hosts())
+        }
+        all_reserved_networks.append(forced_net)
+
+    # Ora calcola lo spazio effettivamente disponibile per le LAN flessibili
+    available_networks = [main_network]
+    for reserved in all_reserved_networks:
         new_available = []
         for net in available_networks:
             if net.overlaps(reserved):
                 new_available.extend(list(net.address_exclude(reserved)))
             else:
                 new_available.append(net)
-        available_networks = new_available
+        available_networks = sorted(new_available)
 
-    for lan in sorted_lans:
+    # Esegui il calcolo VLSM standard sulle LAN rimanenti (flessibili)
+    sorted_flexible_lans = sorted(flexible_lans, key=lambda x: x['hosts_needed'], reverse=True)
+    
+    for lan in sorted_flexible_lans:
+        lan_name = lan['name']
         hosts = lan['hosts_needed']
         required_prefix = 32 - (hosts + 2).bit_length()
         
         allocated = False
         for i, net in enumerate(available_networks):
+            # Cerca uno spazio sufficientemente grande
             if net.prefixlen <= required_prefix:
+                # Alloca la prima subnet disponibile da questo spazio
                 new_subnet = next(net.subnets(new_prefix=required_prefix))
-                subnet_details[lan['name']] = {
+                subnet_details[lan_name] = {
                     "net": new_subnet,
                     "usable_hosts": list(new_subnet.hosts())
                 }
                 
+                # Rimuovi lo spazio allocato da quelli disponibili
                 remaining = list(net.address_exclude(new_subnet))
                 available_networks.pop(i)
                 available_networks.extend(remaining)
-                available_networks.sort()
+                available_networks = sorted(available_networks)
+                
                 allocated = True
                 break
         
         if not allocated:
-            print(f"[ERRORE] Spazio di indirizzi insufficiente per LAN '{lan['name']}'.")
+            print(f"[ERRORE] Spazio di indirizzi insufficiente per allocare la LAN flessibile '{lan_name}'.")
             return None
             
     print("[INFO] Calcolo del subnetting completato.")
