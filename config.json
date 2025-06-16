@@ -1,10 +1,10 @@
 {
-  "main_network": "89.55.4.0/23",
-  "reserved_networks": ["89.55.4.192/26"],
+  "main_network": "192.168.254.0/23",
+  "reserved_networks": [],
   "lans": [
     {
       "name": "LAN1",
-      "hosts_needed": 250,
+      "hosts_needed": 40,
       "components": ["H1", "R1"],
       "assignments": {
         "R1": "ultimo"
@@ -12,7 +12,8 @@
     },
     {
       "name": "LAN2",
-      "hosts_needed": 120,
+      "hosts_needed": 200,
+      "forced_netid": "192.168.255.0",
       "components": ["H2", "R2"],
       "assignments": {
         "R2": "ultimo"
@@ -20,50 +21,19 @@
     },
     {
       "name": "LAN3",
-      "hosts_needed": 20,
+      "hosts_needed": 10,
       "components": ["R1", "R2", "GW"],
       "assignments": {
         "GW": "ultimo"
       }
-    }
-  ],
-  "private_network": {
-    "enabled": true,
-    "name": "PRIV1",
-    "range": "10.10.0.0/24",
-    "components": {
-		"M1": "10.10.0.1",
-		"R1": "10.10.0.254"
-    }
-  },
-  "external_connection": {
-    "enabled": false,
-    "link_range": "192.168.255.0/30",
-    "gateway_device": "GW",
-    "external_device": "External",
-    "devices": {
-      "GW": {
-        "public_ip": "89.55.4.255"
-      },
-      "External": {
-        "public_ip": "1.1.1.1"
-      }
-    }
-  },
-  "routing": {
-    "H1": { "default_gateway": "R1" },
-    "H2": { "default_gateway": "R2" },
-    "R1": {
-      "default_gateway": "GW",
-      "static_routes": { "LAN2": "R2" }
     },
-    "R2": {
-      "default_gateway": "GW",
-      "static_routes": {
-        "LAN1": "R1",
-        "PRIV1": "R1"
+    {
+      "name": "LAN4",
+      "hosts_needed": 20,
+      "components": ["SERVER", "GW"],
+      "assignments": {
+        "GW": "ultimo"
       }
     }
-
-  }
+  ]
 }
